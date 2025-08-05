@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GlassBridge</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/phosphor-icons@1.4.2/src/css/icons.css">
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    /* Basic styles - your custom glassmorphic layout assumed */
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: url('https://img.freepik.com/free-photo/abstract-background-with-flowing-waves_1048-14437.jpg?t=st=1753958006~exp=1753961606~hmac=052fbcaf534dffe9c8e9f7b836a9175f3b41b84bce2d9fbc464a258b2d2e76bf&w=1380') no-repeat center center fixed;
+      background-size: cover;
+      color: white;
+      overflow-x: hidden;
+    }
+
+    #overlay, #loginModal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 99;
+    }
+
+    #loginModal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 2rem;
+      z-index: 9999;
+       backdrop-filter: blur(6px) saturate(200%);
+      overflow: auto;
+    -webkit-backdrop-filter: blur(9px) saturate(200%);
+    background-color: transparent;
+    border-radius: 12px;
+    display: block;
+    color: white;
+    border: 4px solid rgba(255, 255, 255, 0.125);
+    }
+
+    #mainContent {
+      display: none;
+      padding: 1rem;
+    }
+
+    section {
+      margin-bottom: 2rem;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 1rem;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+    }
+
+    input, button {
+		       backdrop-filter: blur(9px) saturate(200%);
+    -webkit-backdrop-filter: blur(9px) saturate(200%);
+    background-color: transparent;
+    border-radius: 6px;
+    max-width: 150px;
+    padding: 2px 2px 2px 2px;
+    margin: 3px 3px 8px 3px;
+    border: 1px solid rgba(255, 255, 255, 0.125);
+      display: inline-block;
+    color: white;
+    }
+
+    ul { list-style: none; padding: 0; }
+
+   #ok{
+                       backdrop-filter: blur(9px) saturate(200%);
+    -webkit-backdrop-filter: blur(9px) saturate(200%);
+    background-color: transparent;
+    border-radius: 6px;
+    max-width: 150px;
+    padding: 2px 2px 2px 2px;
+    margin: 3px 3px 8px 3px;
+    border: 1px solid rgba(255, 255, 255, 0.125);
+      display: inline-block;
+    color: white;
+}
+    li {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem;
+      border-bottom: 1px solid #555;
+    }
+
+    .chat-log {
+		       backdrop-filter: blur(9px) saturate(200%);
+    -webkit-backdrop-filter: blur(9px) saturate(200%);
+    background-color: transparent;
+    border-radius: 12px;
+    border: 4px solid rgba(255, 255, 255, 0.125);
+    height:130px;
+    }
+
+    @media (max-width: 600px) {
+      section { margin: 1rem 0; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Login Modal -->
+  <div id="overlay">
+
+
+  <div id="loginModal">
+  	  <h2> LOGIN <i class="ph ph-biohazard"></i> <i class="ph ph-sign-in"></i></h2>
+  	<input type="text" id="username" placeholder="username" />
+  	<input type="password"  id="password" placeholder="password" />
+  	<button onclick="submitLogin()"><i class="ph ph-sign-in"></i>
+</button>
+  </div>
+  </div>
+  <!-- Main Content -->
+  <div id="mainContent">
+    <section>
+      <h2><i class="ph ph-terminal-window"></i>
+ Upload</h2>
+      <form id="uploadForm">
+        <input type="file" name="file" />
+        <button type="submit"><i class="ph ph-upload-simple"></i>
+</button>
+      </form>
+    </section>
+
+    <section>
+      <h2><i class="ph ph-folder"></i>
+ Files</h2>
+      <ul id="files"></ul>
+      <div id="musicPlayer"></div>
+    </section>
+
+    <section>
+      <h2><i class="ph ph-info"></i>
+
+Host Info</h2>
+      <pre id="sysinfo">LOCATING </pre>
+    </section>
+
+    <section>
+      <h2><i class="ph ph-chat"></i>
+ Chat</h2>
+      <div class="chat-log" id="chatlog"></div>
+      <input type="text" id="msg" placeholder="Type a message..." />
+      <button onclick="sendMsg()"><i class="ph ph-key-return"></i>
+</button>
+    </section>
+
+    <section>
+      <h2><i class="ph ph-power"></i>
+Shutdown</h2>
+      <input type="password" id="shutdownPass" placeholder="Shutdown password" />
+      <button onclick="shutdownServer()"><i class="ph ph-power"></i>
+</button>
+    </section>
+  </div>
+
+  <!-- Script -->
+  <script>
+    const socket = io();
+
+    socket.on("chat", (msg) => {
+      const chatlog = document.getElementById("chatlog");
+      chatlog.innerHTML += `<div>${msg}</div>`;
+      chatlog.scrollTop = chatlog.scrollHeight;
+    });
+
+    function sendMsg() {
+      const input = document.getElementById("msg");
+      socket.emit("chat", input.value);
+      input.value = "";
+    }
+
+    function submitLogin() {
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+
+      fetch("/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      })
+      .then(res => {
+        if (!res.ok) throw new Error("Login failed");
+        return res.json();
+      })
+      .then(data => {
+        if (data.success) {
+          document.getElementById("overlay").style.display = "none";
+          document.getElementById("mainContent").style.display = "block";
+          loadFiles();
+          loadSystem();
+        } else {
+          alert("Wrong credentials");
+        }
+      })
+      .catch(() => alert("Login error"));
+    }
+
+    function loadFiles() {
+      fetch("/files")
+        .then(res => res.json())
+        .then(files => {
+          const list = document.getElementById("files");
+          const music = document.getElementById("musicPlayer");
+          list.innerHTML = "";
+          music.innerHTML = "";
+
+          files.forEach(file => {
+            const li = document.createElement("li");
+            li.innerHTML = `
+              <span>${file.icon} ${file.name}</span>
+              <span>
+                <a href="/download/${file.name}" download id="ok"><i class="ph ph-download-simple"></i>
+</a>
+                <button onclick="delFile('${file.name}')"><i class="ph ph-trash"></i>
+️</button>
+              </span>`;
+            list.appendChild(li);
+
+            if (file.is_music) {
+              const audio = document.createElement("audio");
+              audio.src = `/download/${file.name}`;
+              audio.controls = true;
+              music.appendChild(audio);
+            }
+          });
+        });
+    }
+
+    function delFile(name) {
+      fetch(`/delete/${name}`, { method: "POST" })
+        .then(() => loadFiles());
+    }
+
+    function loadSystem() {
+      fetch("/system")
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("sysinfo").innerText = data.neofetch || "NeoFetch not installed.";
+        });
+    }
+
+    document.getElementById("uploadForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const form = new FormData(this);
+      fetch("/upload", {
+        method: "POST",
+        body: form
+      }).then(() => loadFiles());
+    });
+
+    function shutdownServer() {
+      const pass = document.getElementById("shutdownPass").value;
+      fetch("/shutdown", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pass })
+      }).then(res => {
+        if (res.ok) {
+          alert("Server is shutting down...");
+        } else {
+          alert("Wrong shutdown password!");
+        }
+      });
+    }
+  </script>
+</body>
+</html>
