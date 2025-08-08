@@ -16,7 +16,7 @@ pip install flask websocket flask_socketio
 ```
 3.clone repo
 ```
-wget 
+wget https://github.com/YOCRRZ224/Glass-Bridge.git
 ```
 4.enter the enviorment
 ```
